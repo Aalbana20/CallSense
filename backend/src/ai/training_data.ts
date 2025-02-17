@@ -1,0 +1,22 @@
+// backend/src/ai/training_data.ts
+export const trainingData = [
+  { text: "I'm really upset with the service", label: "angry" },
+  { text: "This is absolutely terrible", label: "angry" },
+  { text: "I've been waiting for hours!", label: "angry" },
+  { text: "Your customer service is awful", label: "angry" },
+  { text: "I want to speak to a manager", label: "angry" },
+  { text: "This is unacceptable", label: "angry" },
+  { text: "I'm disappointed with this experience", label: "angry" },
+  { text: "Everything is great", label: "positive" },
+  { text: "The service was excellent", label: "positive" },
+  { text: "I'm very satisfied", label: "positive" },
+  { text: "Thank you for your help", label: "positive" },
+  { text: "Amazing experience", label: "positive" },
+  { text: "Very professional service", label: "positive" },
+  { text: "Couldn't be happier", label: "positive" },
+  { text: "It was okay", label: "neutral" },
+  { text: "The service was average", label: "neutral" },
+  { text: "Not too bad but not great either", label: "neutral" },
+  { text: "Mediocre experience", label: "neutral" },
+  { text: "It met my expectations", label: "neutral" },
+];
