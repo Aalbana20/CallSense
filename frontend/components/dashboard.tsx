@@ -1,4 +1,3 @@
-// frontend/components/dashboard.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -11,8 +10,8 @@ interface ConversationTurn {
   role: "user" | "system";
   text: string;
   timestamp: string;
-  biasScore?: number;
   sentiment?: string;
+  biasScore?: number;
 }
 
 interface Conversation {
@@ -24,6 +23,7 @@ interface Conversation {
 }
 
 const Dashboard: React.FC = () => {
+  // Initialize conversations as an empty array
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [socket, setSocket] = useState<Socket | null>(null);
 
@@ -37,9 +37,49 @@ const Dashboard: React.FC = () => {
       console.log("Connected to Socket.IO server:", newSocket.id);
     });
 
-    newSocket.on("conversationUpdate", (data: Conversation[]) => {
+    // Handle conversation updates
+    newSocket.on("conversationUpdate", (data: any) => {
       console.log("Received conversation update:", data);
-      setConversations(data);
+
+      // Ensure data is properly formatted as an array of conversations
+      let updatedConversations: Conversation[];
+
+      if (Array.isArray(data)) {
+        updatedConversations = data;
+      } else if (data && typeof data === "object") {
+        // If single conversation object received
+        updatedConversations = [data];
+      } else {
+        updatedConversations = [];
+      }
+
+      setConversations(updatedConversations);
+    });
+
+    // Handle sentiment analysis updates
+    newSocket.on("sentimentAnalysis", (data: any) => {
+      console.log("Received sentiment analysis:", data);
+      if (!data || !data.CallSid) return;
+
+      setConversations((prev) => {
+        return prev.map((conv) => {
+          if (conv.callSid === data.CallSid) {
+            const updatedTurns = conv.turns.map((turn, index) => {
+              // Update the latest user turn with sentiment
+              if (index === conv.turns.length - 2 && turn.role === "user") {
+                return {
+                  ...turn,
+                  sentiment: data.sentiment.prediction,
+                  biasScore: data.sentiment.confidence,
+                };
+              }
+              return turn;
+            });
+            return { ...conv, turns: updatedTurns };
+          }
+          return conv;
+        });
+      });
     });
 
     newSocket.on("disconnect", () => {
@@ -63,6 +103,35 @@ const Dashboard: React.FC = () => {
         return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100";
     }
   };
+
+  const getSentimentColor = (sentiment?: string) => {
+    switch (sentiment?.toLowerCase()) {
+      case "positive":
+        return "bg-green-100 text-green-800";
+      case "negative":
+        return "bg-red-100 text-red-800";
+      case "angry":
+        return "bg-orange-100 text-orange-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  // Guard against non-array conversations data
+  if (!Array.isArray(conversations)) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-indigo-100 dark:from-gray-900 dark:to-indigo-900 p-8">
+        <section className="mt-12 max-w-6xl mx-auto">
+          <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">
+            Live Simulations
+          </h2>
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <p>No live simulation data available.</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-indigo-100 dark:from-gray-900 dark:to-indigo-900 p-8">
@@ -97,16 +166,6 @@ const Dashboard: React.FC = () => {
                     {conv.endTime && (
                       <p>Ended: {new Date(conv.endTime).toLocaleString()}</p>
                     )}
-                    <p>
-                      Duration:{" "}
-                      {conv.endTime
-                        ? `${Math.round(
-                            (new Date(conv.endTime).getTime() -
-                              new Date(conv.startTime).getTime()) /
-                              1000
-                          )} seconds`
-                        : "Ongoing"}
-                    </p>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -132,19 +191,19 @@ const Dashboard: React.FC = () => {
                           {turn.text}
                         </p>
                         {turn.sentiment && (
-                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            Sentiment:
+                          <div className="mt-2 flex items-center gap-2">
                             <span
-                              className={`ml-1 px-2 py-0.5 rounded ${
-                                turn.sentiment === "positive"
-                                  ? "bg-green-100 text-green-800"
-                                  : turn.sentiment === "negative"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                              }`}
+                              className={`text-xs px-2 py-1 rounded ${getSentimentColor(
+                                turn.sentiment
+                              )}`}
                             >
-                              {turn.sentiment}
+                              Sentiment: {turn.sentiment}
                             </span>
+                            {turn.biasScore && (
+                              <span className="text-xs text-gray-500">
+                                Confidence: {(turn.biasScore * 100).toFixed(1)}%
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>

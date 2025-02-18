@@ -6,11 +6,17 @@ export interface ConversationTurn {
   timestamp: string;
 }
 
-export interface ConversationInput {
+export interface ConversationTurnInput {
   role: "user" | "system";
   text: string;
   sentiment?: string;
   timestamp: string;
+}
+
+export interface ConversationInput {
+  status: "in-progress" | "completed" | "error";
+  startTime: string;
+  turns: ConversationTurn[];
 }
 
 export interface Conversation {

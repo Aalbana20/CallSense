@@ -3,19 +3,11 @@ import { Server as SocketIOServer } from "socket.io";
 import { TwiMLBuilder, createErrorResponse } from "./twiml_utils";
 import { conversationManager } from "../ai/conversation_manager";
 import { analyzeUtterance } from "../ai/bias_detector";
-import { endCall } from "./call_controller";
-import { ConversationInput, ConversationTurn } from "../types";
-
-interface ConversationTurn {
-  role: "user" | "system";
-  text: string;
-  sentiment?: string;
-  timestamp: string;
-}
-
-type ConversationTurnInput = Omit<ConversationTurn, "timestamp"> & {
-  timestamp: string;
-};
+import {
+  ConversationInput,
+  ConversationTurn,
+  ConversationTurnInput,
+} from "../types/conversation";
 
 let io: SocketIOServer;
 
@@ -23,9 +15,9 @@ export const initializeSocketIO = (socketIO: SocketIOServer) => {
   io = socketIO;
 };
 
+
 export const handleVoiceCall = (req: Request, res: Response) => {
   console.log("Incoming voice call:", req.body);
-
   const callSid = req.body.CallSid;
 
   if (!callSid) {
@@ -41,7 +33,7 @@ export const handleVoiceCall = (req: Request, res: Response) => {
       turns: [],
     });
 
-    const initialGreeting = "Welcome to CallSim AI. How can I help you today?";
+    const initialGreeting = "Welcome to Call Sense. How can I help you today?";
 
     // Record the system's initial greeting
     const systemTurn: ConversationTurnInput = {
@@ -63,10 +55,11 @@ export const handleVoiceCall = (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     });
 
+    // Create TwiML without a spoken gather prompt.
     const twiml = new TwiMLBuilder()
       .addGreeting(initialGreeting)
       .addPause()
-      .addGather("Please speak after the tone.")
+      .addGather("") // Removed "Please speak after the tone." text
       .build();
 
     res.type("text/xml").send(twiml.toString());
@@ -76,10 +69,10 @@ export const handleVoiceCall = (req: Request, res: Response) => {
   }
 };
 
+
 export const handleVoiceResponse = async (req: Request, res: Response) => {
   const callSid = req.body.CallSid;
   const speechResult = req.body.SpeechResult;
-
   console.log("Voice response request body:", req.body);
 
   if (!callSid) {
@@ -88,21 +81,68 @@ export const handleVoiceResponse = async (req: Request, res: Response) => {
   }
 
   try {
+    // If no speech is captured, prompt the user again.
     if (!speechResult) {
       console.log("No speech result, sending gather response");
       const twiml = new TwiMLBuilder()
         .addGreeting("I didn't catch that.")
         .addPause()
-        .addGather("Could you please repeat that?")
+        .addGather("") // No spoken prompt here either
         .build();
       return res.type("text/xml").send(twiml.toString());
     }
 
-    // Verify conversation exists
-    const conversation = conversationManager.getConversation(callSid);
+    // Convert speech to lowercase for termination check.
+    const speechResultLower = speechResult.toLowerCase();
+
+    // Check for termination keywords.
+    if (
+      speechResultLower === "no" ||
+      speechResultLower === "goodbye" ||
+      speechResultLower === "bye"
+    ) {
+      let conversation = conversationManager.getConversation(callSid);
+      if (!conversation) {
+        // Fallback: create a conversation if one doesn't exist.
+        conversationManager.createConversation(callSid, {
+          status: "completed",
+          startTime: new Date().toISOString(),
+          turns: [],
+        });
+        conversation = conversationManager.getConversation(callSid);
+      } else {
+        conversation.status = "completed";
+      }
+      const currentTimestamp = new Date().toISOString();
+
+      // Record the final user turn.
+      const userTurn: ConversationTurnInput = {
+        role: "user",
+        text: speechResult,
+        timestamp: currentTimestamp,
+      };
+      conversationManager.addTurn(callSid, userTurn);
+
+      // Record the final system response.
+      const farewellMessage = "Thank you for your time. Goodbye!";
+      const systemTurn: ConversationTurnInput = {
+        role: "system",
+        text: farewellMessage,
+        timestamp: currentTimestamp,
+      };
+      conversationManager.addTurn(callSid, systemTurn);
+
+      // End the call.
+      const twiml = new TwiMLBuilder()
+        .addGreeting(farewellMessage)
+        .addHangup()
+        .build();
+      return res.type("text/xml").send(twiml.toString());
+    }
+
+    // Ensure conversation exists for non-terminating speech.
+    let conversation = conversationManager.getConversation(callSid);
     if (!conversation) {
-      console.error("No conversation found for CallSid:", callSid);
-      // Create conversation if it doesn't exist (fallback)
       conversationManager.createConversation(callSid, {
         status: "in-progress",
         startTime: new Date().toISOString(),
@@ -110,7 +150,7 @@ export const handleVoiceResponse = async (req: Request, res: Response) => {
       });
     }
 
-    // Emit speech recognition event
+    // Emit speech recognition event.
     io?.emit("speechResult", {
       CallSid: callSid,
       SpeechResult: speechResult,
@@ -119,11 +159,11 @@ export const handleVoiceResponse = async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     });
 
-    // Analyze the user's speech
+    // Analyze the user's speech.
     const biasResult = await analyzeUtterance(speechResult);
     console.log("Bias Analysis Result:", biasResult);
 
-    // Emit sentiment analysis event
+    // Emit sentiment analysis event.
     io?.emit("sentimentAnalysis", {
       CallSid: callSid,
       sentiment: {
@@ -133,26 +173,31 @@ export const handleVoiceResponse = async (req: Request, res: Response) => {
       },
     });
 
-    // Record the user's turn
+    const currentTimestamp = new Date().toISOString();
+
+    // Record the user's turn.
     const userTurn: ConversationTurnInput = {
       role: "user",
       text: speechResult,
       sentiment: biasResult.prediction,
-      timestamp: new Date().toISOString(),
+      timestamp: currentTimestamp,
     };
     conversationManager.addTurn(callSid, userTurn);
 
+    // Prepare system's response.
+    const systemMessage =
+      "I heard you. Let me process that. Is there anything else I can help you with?";
     const twiml = new TwiMLBuilder()
-      .addGreeting("I heard you. Let me process that.")
+      .addGreeting(systemMessage)
       .addPause()
-      .addGather("Is there anything else I can help you with?")
+      .addGather("") // Removed the prompt text here as well.
       .build();
 
-    // Record the system's response
+    // Record the system's response turn.
     const systemTurn: ConversationTurnInput = {
       role: "system",
-      text: "I heard you. Let me process that. Is there anything else I can help you with?",
-      timestamp: new Date().toISOString(),
+      text: systemMessage,
+      timestamp: currentTimestamp,
     };
     conversationManager.addTurn(callSid, systemTurn);
 
@@ -164,7 +209,7 @@ export const handleVoiceResponse = async (req: Request, res: Response) => {
       error instanceof Error ? error.stack : "No stack trace"
     );
 
-    // Emit error event
+    // Emit error event.
     io?.emit("callError", {
       CallSid: callSid,
       error: error instanceof Error ? error.message : "Unknown error",

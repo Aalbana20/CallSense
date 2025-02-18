@@ -1,4 +1,3 @@
-// backend/src/ai/cohere_client.ts
 import axios, { AxiosError } from "axios";
 import { trainingData } from "./training_data";
 import dotenv from "dotenv";

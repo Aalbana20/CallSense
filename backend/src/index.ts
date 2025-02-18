@@ -7,7 +7,7 @@ import { biasDetector } from "./ai/bias_detector";
 import { endCall } from "./twilio/call_controller";
 import cors from "cors";
 import dotenv from "dotenv";
-import { Conversation } from "./types"; // Added import for Conversation
+import { Conversation } from "./types/conversation"; // Added import for Conversation
 
 dotenv.config();
 

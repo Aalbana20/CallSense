@@ -1,4 +1,3 @@
-// frontend/app/dashboard/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -7,7 +6,7 @@ import type { Socket } from "socket.io-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge"; // Make sure to create this component
+import { Badge } from "@/components/ui/badge";
 
 interface ConversationTurn {
   role: "user" | "system";
@@ -29,7 +28,6 @@ export default function Dashboard() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [socket, setSocket] = useState<Socket | null>(null);
 
-  // Establish socket connection and handle live updates
   useEffect(() => {
     const newSocket = io("http://localhost:5000", {
       transports: ["websocket"],
@@ -40,16 +38,56 @@ export default function Dashboard() {
       console.log("Connected to Socket.IO server:", newSocket.id);
     });
 
-    newSocket.on("conversationUpdate", (data: Conversation[]) => {
+    // Handle initial conversations and updates
+    newSocket.on("conversationUpdate", (data: any) => {
       console.log("Received conversation update:", data);
-      setConversations(data);
+
+      // Ensure data is properly formatted as an array
+      if (Array.isArray(data)) {
+        setConversations(data);
+      } else if (data && typeof data === "object") {
+        // If it's a single conversation, update or add it to the list
+        setConversations((prev) => {
+          const existing = prev.findIndex((c) => c.callSid === data.callSid);
+          if (existing >= 0) {
+            const updated = [...prev];
+            updated[existing] = data;
+            return updated;
+          }
+          return [...prev, data];
+        });
+      }
+    });
+
+    // Handle sentiment analysis updates
+    newSocket.on("sentimentAnalysis", (data: any) => {
+      console.log("Received sentiment analysis:", data);
+      if (!data?.CallSid) return;
+
+      setConversations((prev) =>
+        prev.map((conv) => {
+          if (conv.callSid === data.CallSid) {
+            const updatedTurns = conv.turns.map((turn, index) => {
+              if (index === conv.turns.length - 2 && turn.role === "user") {
+                return {
+                  ...turn,
+                  sentiment: data.sentiment.prediction,
+                  biasScore: data.sentiment.confidence,
+                };
+              }
+              return turn;
+            });
+            return { ...conv, turns: updatedTurns };
+          }
+          return conv;
+        })
+      );
     });
 
     newSocket.on("disconnect", () => {
       console.log("Disconnected from Socket.IO server");
     });
 
-    // Clean up socket on unmount
     return () => {
       newSocket.disconnect();
     };
@@ -68,9 +106,37 @@ export default function Dashboard() {
     }
   };
 
+  const getSentimentColor = (sentiment?: string) => {
+    switch (sentiment?.toLowerCase()) {
+      case "positive":
+        return "bg-green-100 text-green-800";
+      case "negative":
+        return "bg-red-100 text-red-800";
+      case "angry":
+        return "bg-orange-100 text-orange-800";
+      default:
+        return "bg-yellow-100 text-yellow-800";
+    }
+  };
+
+  // Guard clause for empty or invalid conversations
+  if (!Array.isArray(conversations)) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-indigo-100 dark:from-gray-900 dark:to-indigo-900 p-8">
+        <section className="mt-12 max-w-6xl mx-auto">
+          <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">
+            Live Simulations
+          </h2>
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <p>Initializing...</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-indigo-100 dark:from-gray-900 dark:to-indigo-900 p-8">
-      {/* Live Conversations Section */}
       <section className="mt-12 max-w-6xl mx-auto">
         <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">
           Live Simulations
@@ -137,19 +203,19 @@ export default function Dashboard() {
                           {turn.text}
                         </p>
                         {turn.sentiment && (
-                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            Sentiment:
+                          <div className="mt-2 flex items-center gap-2">
                             <span
-                              className={`ml-1 px-2 py-0.5 rounded ${
-                                turn.sentiment === "positive"
-                                  ? "bg-green-100 text-green-800"
-                                  : turn.sentiment === "negative"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                              }`}
+                              className={`text-xs px-2 py-1 rounded ${getSentimentColor(
+                                turn.sentiment
+                              )}`}
                             >
-                              {turn.sentiment}
+                              Sentiment: {turn.sentiment}
                             </span>
+                            {turn.biasScore && (
+                              <span className="text-xs text-gray-500">
+                                Confidence: {(turn.biasScore * 100).toFixed(1)}%
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>

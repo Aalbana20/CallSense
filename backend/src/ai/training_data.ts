@@ -1,22 +1,31 @@
-// backend/src/ai/training_data.ts
-export const trainingData = [
-  { text: "I'm really upset with the service", label: "angry" },
-  { text: "This is absolutely terrible", label: "angry" },
-  { text: "I've been waiting for hours!", label: "angry" },
-  { text: "Your customer service is awful", label: "angry" },
-  { text: "I want to speak to a manager", label: "angry" },
-  { text: "This is unacceptable", label: "angry" },
-  { text: "I'm disappointed with this experience", label: "angry" },
-  { text: "Everything is great", label: "positive" },
-  { text: "The service was excellent", label: "positive" },
-  { text: "I'm very satisfied", label: "positive" },
-  { text: "Thank you for your help", label: "positive" },
-  { text: "Amazing experience", label: "positive" },
-  { text: "Very professional service", label: "positive" },
-  { text: "Couldn't be happier", label: "positive" },
-  { text: "It was okay", label: "neutral" },
-  { text: "The service was average", label: "neutral" },
-  { text: "Not too bad but not great either", label: "neutral" },
-  { text: "Mediocre experience", label: "neutral" },
-  { text: "It met my expectations", label: "neutral" },
+interface TrainingExample {
+  text: string;
+  label: "angry" | "neutral" | "positive";
+}
+
+export const trainingData: TrainingExample[] = [
+  {
+    text: "This is absolutely terrible service. I've been waiting for hours!",
+    label: "angry",
+  },
+  {
+    text: "I can't believe how incompetent your company is. This is ridiculous!",
+    label: "angry",
+  },
+  {
+    text: "I need to check my account balance please.",
+    label: "neutral",
+  },
+  {
+    text: "Can you tell me when my next payment is due?",
+    label: "neutral",
+  },
+  {
+    text: "Thank you so much for your help! You've made my day.",
+    label: "positive",
+  },
+  {
+    text: "I really appreciate how quickly you resolved my issue.",
+    label: "positive",
+  },
 ];

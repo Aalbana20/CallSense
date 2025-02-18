@@ -2,8 +2,9 @@ import { EventEmitter } from "events";
 import {
   Conversation,
   ConversationTurn,
+  ConversationInput,
   ConversationEventTypes,
-} from "../types";
+} from "../types/conversation";
 
 export class ConversationManager extends EventEmitter {
   private conversations: Map<string, Conversation>;
